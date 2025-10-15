@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using Inventory.Domain;
 
 namespace Inventory.Infrastructure;
@@ -33,6 +35,22 @@ public sealed class InMemoryInventoryRepository : IInventoryRepository
         try
         {
             _items[item.Sku] = item;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task<IReadOnlyCollection<InventoryItem>> ListAsync(CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            return _items
+                .Values
+                .Select(item => new InventoryItem(item.Id, item.Sku, item.Quantity))
+                .ToList();
         }
         finally
         {
