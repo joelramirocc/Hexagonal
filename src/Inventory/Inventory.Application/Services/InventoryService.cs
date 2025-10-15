@@ -20,6 +20,23 @@ public class InventoryService
         _storeRepository = storeRepository ?? throw new ArgumentNullException(nameof(storeRepository));
     }
 
+    public async Task<IReadOnlyCollection<StoreInventoryDto>> GetStoresAsync(CancellationToken cancellationToken = default)
+    {
+        var stores = await _storeRepository.GetAllAsync(cancellationToken).ConfigureAwait(false);
+
+        return stores
+            .Select(MapToDto)
+            .ToArray();
+    }
+
+    public async Task<StoreInventoryDto> GetStoreAsync(Guid storeId, CancellationToken cancellationToken = default)
+    {
+        var store = await GetStoreEntityAsync(storeId, cancellationToken).ConfigureAwait(false)
+                    ?? throw new KeyNotFoundException($"No se encontró la tienda con Id {storeId}.");
+
+        return MapToDto(store);
+    }
+
     public async Task<Guid> CreateStoreAsync(string name, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -30,6 +47,25 @@ public class InventoryService
         var store = new Store(Guid.NewGuid(), name);
         await _storeRepository.AddAsync(store, cancellationToken).ConfigureAwait(false);
         return store.Id;
+    }
+
+    public async Task UpdateStoreNameAsync(Guid storeId, string name, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new ArgumentException("El nombre de la tienda es obligatorio.", nameof(name));
+        }
+
+        var store = await GetStoreEntityAsync(storeId, cancellationToken).ConfigureAwait(false)
+                    ?? throw new KeyNotFoundException($"No se encontró la tienda con Id {storeId}.");
+
+        store.Rename(name);
+        await _storeRepository.UpdateAsync(store, cancellationToken).ConfigureAwait(false);
+    }
+
+    public Task DeleteStoreAsync(Guid storeId, CancellationToken cancellationToken = default)
+    {
+        return _storeRepository.DeleteAsync(storeId, cancellationToken);
     }
 
     public async Task<Guid> AddProductAsync(
@@ -62,6 +98,63 @@ public class InventoryService
         return product.Id;
     }
 
+    public async Task<ProductDto> GetProductAsync(
+        Guid storeId,
+        Guid productId,
+        CancellationToken cancellationToken = default)
+    {
+        var store = await GetStoreEntityAsync(storeId, cancellationToken).ConfigureAwait(false)
+                    ?? throw new KeyNotFoundException($"No se encontró la tienda con Id {storeId}.");
+
+        var product = store.GetProduct(productId);
+        return MapToDto(product);
+    }
+
+    public async Task<IReadOnlyCollection<ProductDto>> GetProductsAsync(
+        Guid storeId,
+        CancellationToken cancellationToken = default)
+    {
+        var store = await GetStoreEntityAsync(storeId, cancellationToken).ConfigureAwait(false)
+                    ?? throw new KeyNotFoundException($"No se encontró la tienda con Id {storeId}.");
+
+        return store.Products
+            .Select(MapToDto)
+            .ToArray();
+    }
+
+    public async Task UpdateProductAsync(
+        Guid storeId,
+        Guid productId,
+        string name,
+        decimal price,
+        int quantity,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new ArgumentException("El nombre del producto es obligatorio.", nameof(name));
+        }
+
+        if (price < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(price), "El precio no puede ser negativo.");
+        }
+
+        if (quantity < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(quantity), "La cantidad no puede ser negativa.");
+        }
+
+        var store = await GetStoreEntityAsync(storeId, cancellationToken).ConfigureAwait(false)
+                    ?? throw new KeyNotFoundException($"No se encontró la tienda con Id {storeId}.");
+
+        var product = store.GetProduct(productId);
+        product.Rename(name);
+        product.UpdatePrice(price);
+        product.SetStock(quantity);
+        await _storeRepository.UpdateAsync(store, cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task UpdateProductStockAsync(
         Guid storeId,
         Guid productId,
@@ -73,7 +166,7 @@ public class InventoryService
             throw new ArgumentOutOfRangeException(nameof(quantity), "La cantidad no puede ser negativa.");
         }
 
-        var store = await GetStoreAsync(storeId, cancellationToken).ConfigureAwait(false)
+        var store = await GetStoreEntityAsync(storeId, cancellationToken).ConfigureAwait(false)
                     ?? throw new KeyNotFoundException($"No se encontró la tienda con Id {storeId}.");
 
         var product = store.GetProduct(productId);
@@ -81,22 +174,44 @@ public class InventoryService
         await _storeRepository.UpdateAsync(store, cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task DeleteProductAsync(
+        Guid storeId,
+        Guid productId,
+        CancellationToken cancellationToken = default)
+    {
+        var store = await GetStoreEntityAsync(storeId, cancellationToken).ConfigureAwait(false)
+                    ?? throw new KeyNotFoundException($"No se encontró la tienda con Id {storeId}.");
+
+        store.RemoveProduct(productId);
+        await _storeRepository.UpdateAsync(store, cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<StoreInventoryDto> GetStoreInventoryAsync(
         Guid storeId,
         CancellationToken cancellationToken = default)
     {
-        var store = await GetStoreAsync(storeId, cancellationToken).ConfigureAwait(false)
+        var store = await GetStoreEntityAsync(storeId, cancellationToken).ConfigureAwait(false)
                     ?? throw new KeyNotFoundException($"No se encontró la tienda con Id {storeId}.");
 
+        return MapToDto(store);
+    }
+
+    private Task<Store?> GetStoreEntityAsync(Guid storeId, CancellationToken cancellationToken)
+    {
+        return _storeRepository.GetByIdAsync(storeId, cancellationToken);
+    }
+
+    private static StoreInventoryDto MapToDto(Store store)
+    {
         var products = store.Products
-            .Select(p => new ProductDto(p.Id, p.Name, p.Sku, p.Price, p.Quantity))
+            .Select(MapToDto)
             .ToArray();
 
         return new StoreInventoryDto(store.Id, store.Name, products);
     }
 
-    private Task<Store?> GetStoreAsync(Guid storeId, CancellationToken cancellationToken)
+    private static ProductDto MapToDto(Product product)
     {
-        return _storeRepository.GetByIdAsync(storeId, cancellationToken);
+        return new ProductDto(product.Id, product.Name, product.Sku, product.Price, product.Quantity);
     }
 }

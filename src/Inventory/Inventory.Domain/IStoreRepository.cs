@@ -11,7 +11,11 @@ public interface IStoreRepository
 {
     Task<Store?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyCollection<Store>> GetAllAsync(CancellationToken cancellationToken = default);
+
     Task AddAsync(Store store, CancellationToken cancellationToken = default);
 
     Task UpdateAsync(Store store, CancellationToken cancellationToken = default);
+
+    Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
 }
