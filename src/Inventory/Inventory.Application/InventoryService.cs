@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using BuildingBlocks.Common;
 using Inventory.Domain;
 
@@ -48,5 +49,10 @@ public sealed class InventoryService
         {
             return Result<InventoryItem>.Failure(ex.Message);
         }
+    }
+
+    public Task<IReadOnlyCollection<InventoryItem>> ListAsync(CancellationToken cancellationToken = default)
+    {
+        return _repository.ListAsync(cancellationToken);
     }
 }

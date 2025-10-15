@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Inventory.Application;
 using Inventory.Domain;
 using Microsoft.AspNetCore.Mvc;
@@ -16,6 +17,14 @@ public sealed class InventoryController : ControllerBase
     }
 
     public sealed record AdjustInventoryRequest(string Sku, int Amount);
+
+    [HttpGet]
+    [ProducesResponseType(typeof(IEnumerable<InventoryItem>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IEnumerable<InventoryItem>>> GetAllAsync(CancellationToken cancellationToken)
+    {
+        var items = await _inventoryService.ListAsync(cancellationToken);
+        return Ok(items);
+    }
 
     [HttpPost("increase")]
     [ProducesResponseType(typeof(InventoryItem), StatusCodes.Status200OK)]
